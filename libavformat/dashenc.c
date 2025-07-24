@@ -2066,6 +2066,19 @@ static int dash_parse_prft(DASHContext *c, AVPacket *pkt)
     return 0;
 }
 
+static int min_segment_index(AVFormatContext *s) {
+    DASHContext *c = s->priv_data;
+    int ret = -1;
+    for (int i = 0; i < s->nb_streams; i++) {
+        OutputStream *os = &c->streams[i];
+        if (os->segment_index > 0) {
+            if (ret < 0 || os->segment_index < ret)
+                ret = os->segment_index;
+        }
+    }
+    return ret;
+}
+
 static int calc_expected_segment_index(DASHContext *c, AVPacket *pkt) {
     
     int64_t now_us = av_gettime();
@@ -2130,7 +2143,10 @@ static int dash_write_packet(AVFormatContext *s, AVPacket *pkt)
                     sizeof(c->availability_start_time), start_time_us + c->ast_delay_us);
     } else {
 
-        if (os->segment_index > 0 && c->use_template && !c->use_timeline) {
+        if (os->segment_index > 0
+                && c->use_template
+                && !c->use_timeline
+                && os->segment_index == min_segment_index(s)) {
 
             int expected_segment_index = calc_expected_segment_index(c, pkt);
             if (expected_segment_index + 1 > os->segment_index || expected_segment_index < os->segment_index - 2) {
